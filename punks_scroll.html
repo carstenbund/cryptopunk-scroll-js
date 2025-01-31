@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CryptoPunks Continuous Scrolling</title>
+  <style>
+    body {
+      background: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    canvas {
+      background: #a0a;
+      image-rendering: pixelated;
+    }
+    #controls {
+      position: absolute;
+      bottom: 20px;
+      display: flex;
+      gap: 10px;
+    }
+    button {
+      font-size: 18px;
+      padding: 10px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="matrixCanvas"></canvas>
+
+<div id="controls">
+  <button onclick="changeSpeed(5)">⬅ Slow Down</button>
+  <button onclick="changeSpeed(-5)">➡ Speed Up</button>
+</div>
+
+<script>
+  const canvas = document.getElementById("matrixCanvas");
+  const ctx = canvas.getContext("2d");
+
+  const PIXEL_SIZE = 20;
+  const MATRIX_SIZE = 24;       // Each Punk is scaled to 32x32 "matrix-pixels"
+  canvas.width = MATRIX_SIZE * PIXEL_SIZE;
+  canvas.height = MATRIX_SIZE * PIXEL_SIZE;
+
+  // Master CryptoPunks image
+  const img = new Image();
+  img.src = "https://www.larvalabs.com/public/images/cryptopunks/punks.png";
+
+  const PUNK_SIZE = 24;
+  const PUNKS_PER_ROW = 100;
+  let SCROLL_SPEED = 1000; // Lower value = faster movement
+
+  // We’ll keep track of a queue of punks by their index (0..9999)
+  let punkQueue = [
+    Math.floor(Math.random() * 10000), 
+    Math.floor(Math.random() * 10000),
+    Math.floor(Math.random() * 10000)
+  ];
+
+  // We store the actual ImageData of each extracted/scaled Punk
+  let punks = [null, null, null];
+
+  // Start so that punks appear side by side: left=0, center=+32, right=+64 in "matrix" coords
+  let scrollX = 0; 
+
+  function getPunkCoords(index) {
+    const x = (index % PUNKS_PER_ROW) * PUNK_SIZE;
+    const y = Math.floor(index / PUNKS_PER_ROW) * PUNK_SIZE;
+    return { x, y };
+  }
+
+  function extractPunk(index) {
+    const { x, y } = getPunkCoords(index);
+    // Draw the 24x24 sub-image into a buffer
+    const bufferCanvas = document.createElement("canvas");
+    bufferCanvas.width = PUNK_SIZE;
+    bufferCanvas.height = PUNK_SIZE;
+    const bufferCtx = bufferCanvas.getContext("2d");
+    bufferCtx.drawImage(img, x, y, PUNK_SIZE, PUNK_SIZE, 0, 0, PUNK_SIZE, PUNK_SIZE);
+
+    // Scale that 24x24 up to 32x32 in a second buffer
+    const scaledCanvas = document.createElement("canvas");
+    scaledCanvas.width = MATRIX_SIZE;
+    scaledCanvas.height = MATRIX_SIZE;
+    const scaledCtx = scaledCanvas.getContext("2d");
+    // Disable smoothing so it keeps pixel-art style
+    scaledCtx.imageSmoothingEnabled = false;
+    scaledCtx.drawImage(bufferCanvas, 0, 0, MATRIX_SIZE, MATRIX_SIZE);
+
+    return scaledCtx.getImageData(0, 0, MATRIX_SIZE, MATRIX_SIZE);
+  }
+
+  function drawImageData(imageData, offsetX, offsetY) {
+    for (let i = 0; i < MATRIX_SIZE; i++) {
+      for (let j = 0; j < MATRIX_SIZE; j++) {
+        const pixelIndex = (i * MATRIX_SIZE + j) * 4;
+        const r = imageData.data[pixelIndex];
+        const g = imageData.data[pixelIndex + 1];
+        const b = imageData.data[pixelIndex + 2];
+        const a = imageData.data[pixelIndex + 3];
+        if (a > 0) {
+          ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+          ctx.fillRect(
+            (j + offsetX) * PIXEL_SIZE,
+            (i + offsetY) * PIXEL_SIZE,
+            PIXEL_SIZE,
+            PIXEL_SIZE
+          );
+        }
+      }
+    }
+  }
+
+  function drawPunks() {
+    // If any haven't loaded yet, skip
+    if (!punks[0] || !punks[1] || !punks[2]) return;
+
+    // Clear entire canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // We place them side-by-side with 32 matrix-pixels = width of each
+    // left at scrollX, center at scrollX + 32, right at scrollX + 64
+    drawImageData(punks[0], scrollX, 0);
+    drawImageData(punks[1], scrollX + MATRIX_SIZE, 0);
+    drawImageData(punks[2], scrollX + MATRIX_SIZE * 2, 0);
+
+    // Move them left by 1 matrix-pixel each frame
+    scrollX -= 1;
+
+    // If leftmost Punk has fully scrolled off,
+    // i.e. if left punk's right edge = (scrollX + 32) <= 0
+    if (scrollX + MATRIX_SIZE <= 0) {
+      // Remove the leftmost index from the queue
+      punkQueue.shift();
+      // Add a new random punk to the queue
+      punkQueue.push(Math.floor(Math.random() * 10000));
+
+      // Shift the image data references
+      punks[0] = punks[1];
+      punks[1] = punks[2];
+      // Extract the new rightmost
+      punks[2] = extractPunk(punkQueue[2]);
+
+      // Move scrollX forward so that the new set of punks is partly on-screen
+      scrollX += MATRIX_SIZE; 
+    }
+  }
+
+  function changeSpeed(value) {
+    // Lower SCROLL_SPEED means quicker updates
+    SCROLL_SPEED = Math.max(5, SCROLL_SPEED + value);
+  }
+
+  function PunkLoop() {
+    drawPunks();
+    setTimeout(PunkLoop, SCROLL_SPEED);
+  }
+
+  img.onload = () => {
+    // Extract the 3 initial punks
+    punks[0] = extractPunk(punkQueue[0]);
+    punks[1] = extractPunk(punkQueue[1]);
+    punks[2] = extractPunk(punkQueue[2]);
+    PunkLoop();
+  };
+</script>
+</body>
+</html>
