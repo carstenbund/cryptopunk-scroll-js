@@ -127,15 +127,15 @@
     // We place them side-by-side with 32 matrix-pixels = width of each
     // left at scrollX, center at scrollX + 32, right at scrollX + 64
     drawImageData(punks[0], scrollX, 0);
-    drawImageData(punks[1], scrollX + MATRIX_SIZE, 0);
-    drawImageData(punks[2], scrollX + MATRIX_SIZE * 2, 0);
+    drawImageData(punks[1], scrollX - MATRIX_SIZE, 0);
+    drawImageData(punks[2], scrollX - MATRIX_SIZE * 2, 0);
 
     // Move them left by 1 matrix-pixel each frame
-    scrollX -= 1;
+    scrollX += 1;
 
     // If leftmost Punk has fully scrolled off,
     // i.e. if left punk's right edge = (scrollX + 32) <= 0
-    if (scrollX + MATRIX_SIZE <= 0) {
+    if (scrollX >= MATRIX_SIZE) {
       // Remove the leftmost index from the queue
       punkQueue.shift();
       // Add a new random punk to the queue
@@ -148,7 +148,7 @@
       punks[2] = extractPunk(punkQueue[2]);
 
       // Move scrollX forward so that the new set of punks is partly on-screen
-      scrollX += MATRIX_SIZE; 
+      scrollX -= MATRIX_SIZE; 
     }
   }
 
